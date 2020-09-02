@@ -6849,6 +6849,11 @@ node-gyp@^7.1.0:
     tar "^6.0.2"
     which "^2.0.2"
 
+node-addon-api@2.0.0:
+  version "2.0.0"
+  resolved "https://registry.yarnpkg.com/node-addon-api/-/node-addon-api-2.0.0.tgz#f9afb8d777a91525244b01775ea0ddbe1125483b"
+  integrity sha512-ASCL5U13as7HhOExbT6OlWJJUV/lLzL2voOSP1UVehpRD8FbSrSDjfScK/KwAvVTI5AS6r4VwbOMlIqtvRidnA==
+
 node-libs-browser@^2.2.1:
   version "2.2.1"
   resolved "https://registry.yarnpkg.com/node-libs-browser/-/node-libs-browser-2.2.1.tgz#b64f513d18338625f90346d27b0d235e631f6425"
@@ -10426,12 +10431,12 @@ vscode-ripgrep@^1.11.2:
     https-proxy-agent "^4.0.0"
     proxy-from-env "^1.1.0"
 
-vscode-sqlite3@4.0.10:
-  version "4.0.10"
-  resolved "https://registry.yarnpkg.com/vscode-sqlite3/-/vscode-sqlite3-4.0.10.tgz#cf34cd98e5a49b24d3bb5ff5f2058744931f7cee"
-  integrity sha512-oYH3Nff3AMfbZpDiOhUh+hVtxClwrXBt9SGHGed+RcKf1Z4/fkLpfaldZeWgn4YBHFjNJjJ8HHRRfVvB8fXj1w==
+vscode-sqlite3@5.0.1:
+  version "5.0.1"
+  resolved "https://registry.yarnpkg.com/vscode-sqlite3/-/vscode-sqlite3-5.0.1.tgz#b373c75ec79a6eb201f40b6832682cad58ea688c"
+  integrity sha512-UKuekHQkl7dj+EgXGUky+j2EmHacXoti5NDw174D52rBBUdl9aVWYEnPqbiYfPEYqSlWcRtp/KJwQpIwF/FDpQ==
   dependencies:
-    nan "^2.14.0"
+    node-addon-api "2.0.0"
 
 vscode-telemetry-extractor@^1.7.0:
   version "1.7.0"
