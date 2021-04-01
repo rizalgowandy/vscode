@@ -115,11 +115,22 @@ steps:
       export SDKROOT=/Applications/Xcode_12.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX11.0.sdk
       ls /Applications/Xcode_12.2.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/
       yarn electron-rebuild
-      # remove once https://github.com/prebuild/prebuild-install/pull/140 is merged and found in keytar
-      cd ./node_modules/keytar
-      node-gyp rebuild
     displayName: Rebuild native modules for ARM64
     condition: and(succeeded(), eq(variables['VSCODE_ARCH'], 'arm64'))
+
+  - script: |
+      set -e
+      export npm_config_arch=$(VSCODE_ARCH)
+      export npm_config_node_gyp=$(which node-gyp)
+      export npm_config_build_from_source=true
+      export npm_config_runtime=electron
+      export npm_config_disturl="https://electronjs.org/headers"
+      export npm_config_target=$(node -p "require('./build/lib/util').getElectronVersion()")
+      # remove once https://github.com/prebuild/prebuild-install/pull/140 is merged and found in keytar
+      cd ./node_modules/keytar
+      npx node-gyp rebuild
+    displayName: Rebuild keytar
+    condition: and(succeeded(), ne(variables.NODE_MODULES_RESTORED, 'true'))
 
   # This script brings in the right resources (images, icons, etc) based on the quality (insiders, stable, exploration)
   - script: |
