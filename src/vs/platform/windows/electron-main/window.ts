@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { release } from 'os';
+import product from 'vs/platform/product/common/product';
 import { join } from 'vs/base/common/path';
 import { localize } from 'vs/nls';
 import { getMarks, mark } from 'vs/base/common/performance';
@@ -870,6 +871,9 @@ export class CodeWindow extends Disposable implements ICodeWindow {
 		configuration.os = {
 			release: release()
 		};
+
+		// Product
+		configuration.product = product;
 
 		// Store into config object URL
 		this.configObjectUrl.update(configuration);

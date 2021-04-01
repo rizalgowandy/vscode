@@ -50,7 +50,7 @@
 		// Await window configuration from preload
 		performance.mark('code/willWaitForWindowConfig');
 		/** @type {import('./vs/base/parts/sandbox/common/sandboxTypes').ISandboxConfiguration} */
-		const configuration = await preloadGlobals.context.configuration;
+		const configuration = await preloadGlobals.context.resolveConfiguration();
 		performance.mark('code/didWaitForWindowConfig');
 
 		// Developer keybindings

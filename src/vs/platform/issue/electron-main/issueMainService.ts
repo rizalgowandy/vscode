@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import product from 'vs/platform/product/common/product';
 import { localize } from 'vs/nls';
 import { arch, release, type } from 'os';
-import { IProductService } from 'vs/platform/product/common/productService';
 import { ICommonIssueService, IssueReporterData, ProcessExplorerData } from 'vs/platform/issue/common/issue';
 import { BrowserWindow, ipcMain, screen, IpcMainEvent, Display } from 'electron';
 import { ILaunchMainService } from 'vs/platform/launch/electron-main/launchMainService';
@@ -49,7 +49,6 @@ export class IssueMainService implements ICommonIssueService {
 		@IDiagnosticsService private readonly diagnosticsService: IDiagnosticsService,
 		@IDialogMainService private readonly dialogMainService: IDialogMainService,
 		@INativeHostMainService private readonly nativeHostMainService: INativeHostMainService,
-		@IProductService private readonly productService: IProductService,
 		@IProtocolMainService private readonly protocolMainService: IProtocolMainService
 	) {
 		this.registerListeners();
@@ -202,14 +201,7 @@ export class IssueMainService implements ICommonIssueService {
 						arch: arch(),
 						release: release(),
 					},
-					product: {
-						nameShort: this.productService.nameShort,
-						version: !!this.productService.darwinUniversalAssetId ? `${this.productService.version} (Universal)` : this.productService.version,
-						commit: this.productService.commit,
-						date: this.productService.date,
-						reportIssueUrl: this.productService.reportIssueUrl,
-						reportMarketplaceIssueUrl: this.productService.reportMarketplaceIssueUrl
-					}
+					product: product
 				};
 
 				interface IIssueReporterWindowConfig extends ISandboxConfiguration, Extract<typeof configuration, any> { }
@@ -258,7 +250,8 @@ export class IssueMainService implements ICommonIssueService {
 					windowId: 0, // filled in later
 					userEnv: this.userEnv,
 					machineId: this.machineId,
-					data
+					data,
+					product: product
 				};
 
 				interface IProcessExplorerWindowConfig extends ISandboxConfiguration, Extract<typeof configuration, any> { }

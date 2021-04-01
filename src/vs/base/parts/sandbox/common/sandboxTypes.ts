@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { IProcessEnvironment } from 'vs/base/common/platform';
+import { IProductConfiguration } from 'vs/base/common/product';
 
 
 // #######################################################################
@@ -20,6 +21,8 @@ import { IProcessEnvironment } from 'vs/base/common/platform';
 export interface ISandboxConfiguration {
 	appRoot: string;
 	userEnv: IProcessEnvironment;
+
+	product: IProductConfiguration;
 
 	zoomLevel?: number;
 

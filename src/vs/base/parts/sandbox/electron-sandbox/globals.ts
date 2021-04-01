@@ -121,7 +121,12 @@ export interface ISandboxContext {
 	 * A configuration object made accessible from the main side
 	 * to configure the sandbox browser window.
 	 */
-	configuration: Promise<ISandboxConfiguration>;
+	configuration(): ISandboxConfiguration | undefined;
+
+	/**
+	 * Allows to await the resolution of the configuration object.
+	 */
+	resolveConfiguration(): Promise<ISandboxConfiguration>;
 }
 
 export const ipcRenderer: IpcRenderer = globals.vscode.ipcRenderer;
