@@ -112,7 +112,7 @@ steps:
       export npm_config_target=$(node -p "require('./build/lib/util').getElectronVersion()")
       # remove once https://github.com/prebuild/prebuild-install/pull/140 is merged and found in keytar
       cd ./node_modules/keytar
-      npx node-gyp rebuild
+      npx node-gyp rebuild --verbose
     displayName: Rebuild keytar
     condition: and(succeeded(), ne(variables.NODE_MODULES_RESTORED, 'true'))
 
