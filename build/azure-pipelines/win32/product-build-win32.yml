@@ -95,6 +95,7 @@ steps:
       $env:npm_config_disturl="https://electronjs.org/headers"
       $env:npm_config_target=$(node -p "require('./build/lib/util').getElectronVersion()")
       exec { cd .\node_modules\keytar }
+      exec { npx npm install }
       exec { npx node-gyp rebuild }
     displayName: Rebuild keytar
     condition: and(succeeded(), ne(variables.NODE_MODULES_RESTORED, 'true'))
