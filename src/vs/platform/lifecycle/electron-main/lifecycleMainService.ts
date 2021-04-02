@@ -243,7 +243,7 @@ export class LifecycleMainService extends Disposable implements ILifecycleMainSe
 		// should be called or not.
 		const windowAllClosedListener = () => {
 			this.logService.trace('Lifecycle#app.on(window-all-closed)');
-
+			console.log(`Active Requests : ${(process as any)._getActiveRequests()}`);
 			// Windows/Linux: we quit when all windows have closed
 			// Mac: we only quit when quit was requested
 			if (this._quitRequested || !isMacintosh) {
