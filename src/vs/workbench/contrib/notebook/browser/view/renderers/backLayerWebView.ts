@@ -26,6 +26,7 @@ import { IWebviewService, WebviewContentPurpose, WebviewElement } from 'vs/workb
 import { asWebviewUri } from 'vs/workbench/contrib/webview/common/webviewUri';
 import { IWorkbenchEnvironmentService } from 'vs/workbench/services/environment/common/environmentService';
 import * as nls from 'vs/nls';
+import { coalesce } from 'vs/base/common/arrays';
 
 interface BaseToWebviewMessage {
 	readonly __vscode_notebook_message: true;
@@ -35,12 +36,16 @@ export interface WebviewIntialized extends BaseToWebviewMessage {
 	type: 'initialized';
 }
 
-export interface IDimensionMessage extends BaseToWebviewMessage {
-	type: 'dimension';
+export interface DimensionUpdate {
 	id: string;
 	init?: boolean;
-	data: { height: number };
+	height: number;
 	isOutput?: boolean;
+}
+
+export interface IDimensionMessage extends BaseToWebviewMessage {
+	type: 'dimension';
+	updates: readonly DimensionUpdate[];
 }
 
 export interface IMouseEnterMessage extends BaseToWebviewMessage {
@@ -183,20 +188,13 @@ export interface ICreationRequestMessage {
 export interface IContentWidgetTopRequest {
 	id: string;
 	top: number;
-	left: number;
+	forceDisplay: boolean;
 }
 
 export interface IViewScrollTopRequestMessage {
 	type: 'view-scroll';
-	top?: number;
-	forceDisplay: boolean;
 	widgets: IContentWidgetTopRequest[];
-	version: number;
-}
-
-export interface IViewScrollMarkdownRequestMessage {
-	type: 'view-scroll-markdown';
-	cells: { id: string; top: number }[];
+	markdownPreviews: { id: string; top: number }[];
 }
 
 export interface IScrollRequestMessage {
@@ -264,19 +262,19 @@ export interface ICreateMarkdownMessage {
 	content: string;
 	top: number;
 }
-export interface IRemoveMarkdownMessage {
-	type: 'removeMarkdownPreview',
-	id: string;
+export interface IDeleteMarkdownMessage {
+	type: 'deleteMarkdownPreview',
+	ids: readonly string[];
 }
 
 export interface IHideMarkdownMessage {
-	type: 'hideMarkdownPreview';
-	id: string;
+	type: 'hideMarkdownPreviews';
+	ids: readonly string[];
 }
 
 export interface IUnhideMarkdownMessage {
-	type: 'unhideMarkdownPreview';
-	id: string;
+	type: 'unhideMarkdownPreviews';
+	ids: readonly string[];
 }
 
 export interface IShowMarkdownMessage {
@@ -287,10 +285,9 @@ export interface IShowMarkdownMessage {
 	top: number;
 }
 
-export interface IUpdateMarkdownPreviewSelectionState {
-	readonly type: 'updateMarkdownPreviewSelectionState',
-	readonly id: string;
-	readonly isSelected: boolean;
+export interface IUpdateSelectedMarkdownPreviews {
+	readonly type: 'updateSelectedMarkdownPreviews',
+	readonly selectedCellIds: readonly string[]
 }
 
 export interface IInitializeMarkdownMessage {
@@ -333,13 +330,12 @@ export type ToWebviewMessage =
 	| IUpdateDecorationsMessage
 	| ICustomRendererMessage
 	| ICreateMarkdownMessage
-	| IRemoveMarkdownMessage
+	| IDeleteMarkdownMessage
 	| IShowMarkdownMessage
 	| IHideMarkdownMessage
 	| IUnhideMarkdownMessage
-	| IUpdateMarkdownPreviewSelectionState
-	| IInitializeMarkdownMessage
-	| IViewScrollMarkdownRequestMessage;
+	| IUpdateSelectedMarkdownPreviews
+	| IInitializeMarkdownMessage;
 
 export type AnyMessage = FromWebviewMessage | ToWebviewMessage;
 
@@ -367,12 +363,11 @@ export interface IResolvedBackLayerWebview {
 	webview: WebviewElement;
 }
 
-let version = 0;
 export class BackLayerWebView<T extends ICommonCellInfo> extends Disposable {
 	element: HTMLElement;
 	webview: WebviewElement | undefined = undefined;
 	insetMapping: Map<IDisplayOutputViewModel, ICachedInset<T>> = new Map();
-	markdownPreviewMapping = new Map<string, { version: number, visible: boolean }>();
+	readonly markdownPreviewMapping = new Map<string, { version: number, visible: boolean }>();
 	hiddenInsetMapping: Set<IDisplayOutputViewModel> = new Set();
 	reversedInsetMapping: Map<string, IDisplayOutputViewModel> = new Map();
 	localResourceRootsCache: URI[] | undefined = undefined;
@@ -574,8 +569,14 @@ export class BackLayerWebView<T extends ICommonCellInfo> extends Disposable {
 						background-color: var(--vscode-notebook-outputContainerBackgroundColor);
 					}
 
-					#container > div > div.preview {
+					/* markdown */
+					#container > div.preview {
 						width: 100%;
+						padding-right: ${this.options.previewNodePadding}px;
+						padding-left: ${this.options.leftMargin}px;
+						padding-top: ${this.options.previewNodePadding}px;
+						padding-bottom: ${this.options.previewNodePadding}px;
+
 						box-sizing: border-box;
 						white-space: nowrap;
 						overflow: hidden;
@@ -584,28 +585,21 @@ export class BackLayerWebView<T extends ICommonCellInfo> extends Disposable {
 						-ms-user-select: none;
 						white-space: initial;
 						cursor: grab;
+
+						color: var(--vscode-foreground);
 					}
 
-					#container > div > div.preview.emptyMarkdownCell::before {
+					#container > div.preview.emptyMarkdownCell::before {
 						content: "${nls.localize('notebook.emptyMarkdownPlaceholder', "Empty markdown cell, double click or press enter to edit.")}";
 						font-style: italic;
 						opacity: 0.6;
 					}
 
-					/* markdown */
-					#container > div > div.preview {
-						color: var(--vscode-foreground);
-						width: 100%;
-						padding-left: ${this.options.leftMargin}px;
-						padding-top: ${this.options.previewNodePadding}px;
-						padding-bottom: ${this.options.previewNodePadding}px;
-					}
-
-					#container > div > div.preview.selected {
+					#container > div.preview.selected {
 						background: var(--vscode-notebook-selectedCellBackground);
 					}
 
-					#container > div > div.preview.dragging {
+					#container > div.preview.dragging {
 						background-color: var(--vscode-editor-background);
 					}
 
@@ -838,18 +832,17 @@ var requirejs = (function() {
 			switch (data.type) {
 				case 'dimension':
 					{
-						if (data.isOutput) {
-							const height = data.data.height;
-							const outputHeight = height;
-
-							const resolvedResult = this.resolveOutputId(data.id);
-							if (resolvedResult) {
-								const { cellInfo, output } = resolvedResult;
-								this.notebookEditor.updateOutputHeight(cellInfo, output, outputHeight, !!data.init, 'webview#dimension');
+						for (const update of data.updates) {
+							const height = update.height;
+							if (update.isOutput) {
+								const resolvedResult = this.resolveOutputId(update.id);
+								if (resolvedResult) {
+									const { cellInfo, output } = resolvedResult;
+									this.notebookEditor.updateOutputHeight(cellInfo, output, height, !!update.init, 'webview#dimension');
+								}
+							} else {
+								this.notebookEditor.updateMarkdownCellHeight(update.id, height, !!update.init);
 							}
-						} else {
-							const cellId = data.id.substr(0, data.id.length - '_preview'.length);
-							this.notebookEditor.updateMarkdownCellHeight(cellId, data.data.height, !!data.init);
 						}
 						break;
 					}
@@ -1109,20 +1102,16 @@ var requirejs = (function() {
 		return true;
 	}
 
-	updateMarkdownScrollTop(items: { id: string, top: number }[]) {
-		this._sendMessageToWebview({
-			type: 'view-scroll-markdown',
-			cells: items
-		});
-	}
-
-	updateViewScrollTop(top: number, forceDisplay: boolean, items: IDisplayOutputLayoutUpdateRequest[]) {
+	updateScrollTops(outputs: IDisplayOutputLayoutUpdateRequest[], markdownPreviews: { id: string, top: number }[]) {
 		if (this._disposed) {
 			return;
 		}
 
-		const widgets: IContentWidgetTopRequest[] = items.map(item => {
-			const outputCache = this.insetMapping.get(item.output)!;
+		const widgets = coalesce(outputs.map((item): IContentWidgetTopRequest | undefined => {
+			const outputCache = this.insetMapping.get(item.output);
+			if (!outputCache) {
+				return;
+			}
 			const id = outputCache.outputId;
 			const outputOffset = item.outputOffset;
 			outputCache.cachedCreation.top = outputOffset;
@@ -1131,16 +1120,18 @@ var requirejs = (function() {
 			return {
 				id: id,
 				top: outputOffset,
-				left: 0
+				forceDisplay: item.forceDisplay,
 			};
-		});
+		}));
+
+		if (!widgets.length && !markdownPreviews.length) {
+			return;
+		}
 
 		this._sendMessageToWebview({
-			top,
 			type: 'view-scroll',
-			version: version++,
-			forceDisplay,
-			widgets: widgets
+			widgets: widgets,
+			markdownPreviews,
 		});
 	}
 
@@ -1197,80 +1188,82 @@ var requirejs = (function() {
 		entry.visible = true;
 	}
 
-	async hideMarkdownPreview(cellId: string,) {
+	async hideMarkdownPreviews(cellIds: readonly string[]) {
 		if (this._disposed) {
 			return;
 		}
 
-		const entry = this.markdownPreviewMapping.get(cellId);
-		if (!entry) {
-			// TODO: this currently seems expected on first load
-			// console.error(`Try to hide a preview that does not exist: ${cellId}`);
-			return;
+		const cellsToHide: string[] = [];
+		for (const cellId of cellIds) {
+			const entry = this.markdownPreviewMapping.get(cellId);
+			if (entry) {
+				if (entry.visible) {
+					cellsToHide.push(cellId);
+					entry.visible = false;
+				}
+			}
 		}
 
-		if (entry.visible) {
+		if (cellsToHide.length) {
 			this._sendMessageToWebview({
-				type: 'hideMarkdownPreview',
-				id: cellId
+				type: 'hideMarkdownPreviews',
+				ids: cellsToHide
 			});
-			entry.visible = false;
 		}
 	}
 
-	async unhideMarkdownPreview(cellId: string,) {
+	async unhideMarkdownPreviews(cellIds: readonly string[]) {
 		if (this._disposed) {
 			return;
 		}
 
-		const entry = this.markdownPreviewMapping.get(cellId);
-		if (!entry) {
-			console.error(`Try to unhide a preview that does not exist: ${cellId}`);
-			return;
+		const toUnhide: string[] = [];
+		for (const cellId of cellIds) {
+			const entry = this.markdownPreviewMapping.get(cellId);
+			if (entry) {
+				if (!entry.visible) {
+					entry.visible = true;
+					toUnhide.push(cellId);
+				}
+			} else {
+				console.error(`Trying to unhide a preview that does not exist: ${cellId}`);
+			}
 		}
-
-		if (!entry.visible) {
-			this._sendMessageToWebview({
-				type: 'unhideMarkdownPreview',
-				id: cellId
-			});
-			entry.visible = true;
-		}
-	}
-
-	async removeMarkdownPreview(cellId: string,) {
-		if (this._disposed) {
-			return;
-		}
-
-		if (!this.markdownPreviewMapping.has(cellId)) {
-			console.error(`Try to delete a preview that does not exist: ${cellId}`);
-			return;
-		}
-
-		this.markdownPreviewMapping.delete(cellId);
 
 		this._sendMessageToWebview({
-			type: 'removeMarkdownPreview',
-			id: cellId
+			type: 'unhideMarkdownPreviews',
+			ids: toUnhide,
 		});
 	}
 
-	async updateMarkdownPreviewSelectionState(cellId: any, isSelected: boolean) {
+	async deleteMarkdownPreviews(cellIds: readonly string[]) {
 		if (this._disposed) {
 			return;
 		}
 
-		if (!this.markdownPreviewMapping.has(cellId)) {
-			// TODO: this currently seems expected on first load
-			// console.error(`Try to update selection state for preview that does not exist: ${cellId}`);
+		for (const id of cellIds) {
+			if (!this.markdownPreviewMapping.has(id)) {
+				console.error(`Trying to delete a preview that does not exist: ${id}`);
+			}
+			this.markdownPreviewMapping.delete(id);
+		}
+
+		if (cellIds.length) {
+			this._sendMessageToWebview({
+				type: 'deleteMarkdownPreview',
+				ids: cellIds
+			});
+		}
+	}
+
+	async updateMarkdownPreviewSelections(selectedCellsIds: string[]) {
+		if (this._disposed) {
 			return;
 		}
 
 		this._sendMessageToWebview({
-			type: 'updateMarkdownPreviewSelectionState',
-			id: cellId,
-			isSelected
+			type: 'updateSelectedMarkdownPreviews',
+			selectedCellIds: selectedCellsIds.filter(id => this.markdownPreviewMapping.has(id)),
 		});
 	}
 
@@ -1368,27 +1361,29 @@ var requirejs = (function() {
 		this.reversedInsetMapping.set(message.outputId, content.source);
 	}
 
-	removeInset(output: ICellOutputViewModel) {
+	removeInsets(outputs: readonly ICellOutputViewModel[]) {
 		if (this._disposed) {
 			return;
 		}
 
-		const outputCache = this.insetMapping.get(output);
-		if (!outputCache) {
-			return;
+		for (const output of outputs) {
+			const outputCache = this.insetMapping.get(output);
+			if (!outputCache) {
+				continue;
+			}
+
+			const id = outputCache.outputId;
+
+			this._sendMessageToWebview({
+				type: 'clearOutput',
+				apiNamespace: outputCache.cachedCreation.apiNamespace,
+				cellUri: outputCache.cellInfo.cellUri.toString(),
+				outputId: id,
+				cellId: outputCache.cellInfo.cellId
+			});
+			this.insetMapping.delete(output);
+			this.reversedInsetMapping.delete(id);
 		}
-
-		const id = outputCache.outputId;
-
-		this._sendMessageToWebview({
-			type: 'clearOutput',
-			apiNamespace: outputCache.cachedCreation.apiNamespace,
-			cellUri: outputCache.cellInfo.cellUri.toString(),
-			outputId: id,
-			cellId: outputCache.cellInfo.cellId
-		});
-		this.insetMapping.delete(output);
-		this.reversedInsetMapping.delete(id);
 	}
 
 	hideInset(output: ICellOutputViewModel) {
